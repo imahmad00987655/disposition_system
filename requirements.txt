@@ -1,0 +1,93 @@
+# Docker Deployment Requirements
+# This file lists all system dependencies and deployment requirements
+
+# ============================================
+# Node.js Dependencies (from package.json)
+# ============================================
+# All dependencies are listed in package.json
+# Run: npm install (or npm ci for production)
+
+# Production Dependencies:
+- next@^14.2.0
+- react@^18.3.0
+- react-dom@^18.3.0
+- @tanstack/react-table@^8.13.0
+- @tanstack/react-query@^5.28.0
+- react-hook-form@^7.51.0
+- zod@^3.22.4
+- @hookform/resolvers@^3.3.4
+- framer-motion@^11.0.0
+- date-fns@^3.3.0
+- lucide-react@^0.344.0
+- sonner@^1.4.0
+- xlsx@^0.18.5
+- jspdf@^2.5.1
+- jspdf-autotable@^3.8.2
+- class-variance-authority@^0.7.0
+- clsx@^2.1.0
+- tailwind-merge@^2.2.0
+- zustand@^4.5.0
+
+# Development Dependencies:
+- @types/node@^20.11.0
+- @types/react@^18.2.55
+- @types/react-dom@^18.2.19
+- typescript@^5.3.3
+- tailwindcss@^3.4.1
+- postcss@^8.4.35
+- autoprefixer@^10.4.17
+- eslint@^8.56.0
+- eslint-config-next@^14.2.0
+
+# ============================================
+# System Requirements
+# ============================================
+# Node.js: 20.x or higher
+# Docker: 20.x or higher (for containerized deployment)
+# Docker Compose: 2.x or higher (optional)
+
+# ============================================
+# Backend Requirements
+# ============================================
+# PHP: 7.4+ (for PHP API endpoints)
+# Apache/Nginx: For serving PHP files
+# SQL Server: Access to database at 192.168.1.6:1433
+# MySQL: Access to database at 192.168.1.209
+
+# ============================================
+# Network Requirements
+# ============================================
+# Port 6126: Next.js application (configurable)
+# Port 80/443: PHP backend (Apache/Nginx)
+# Port 6004: Complaints API
+# Port 5125: Orders API
+# Port 1433: SQL Server database
+# Port 3306: MySQL database
+
+# ============================================
+# Environment Variables Required
+# ============================================
+# NEXT_PUBLIC_API_BASE_URL: Base URL for PHP API endpoints
+# NEXT_PUBLIC_COMPLAINTS_API: Complaints API endpoint
+# NEXT_PUBLIC_ORDERS_API: Orders API endpoint
+# NODE_ENV: production/development
+# PORT: Application port (default: 6126)
+
+# ============================================
+# Installation Commands
+# ============================================
+# Local Development:
+#   npm install
+#   npm run dev
+
+# Production Build:
+#   npm ci --only=production
+#   npm run build
+#   npm start
+
+# Docker Deployment:
+#   docker-compose up -d --build
+#   OR
+#   docker build -t disposition-system .
+#   docker run -p 6126:6126 disposition-system
+
