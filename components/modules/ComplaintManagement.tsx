@@ -12,15 +12,32 @@ import { DispositionForm } from '@/components/modules/DispositionForm';
 interface ComplaintManagementProps {
   onComplaintsLoaded?: (complaints: Complaint[]) => void;
   searchTerm?: string;
+  preloadedComplaints?: Complaint[]; // Accept pre-loaded data
 }
 
-export const ComplaintManagement: React.FC<ComplaintManagementProps> = ({ onComplaintsLoaded, searchTerm }) => {
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [loading, setLoading] = useState(true);
+export const ComplaintManagement: React.FC<ComplaintManagementProps> = ({ 
+  onComplaintsLoaded, 
+  searchTerm,
+  preloadedComplaints 
+}) => {
+  const [complaints, setComplaints] = useState<Complaint[]>(preloadedComplaints || []);
+  const [loading, setLoading] = useState(!preloadedComplaints || preloadedComplaints.length === 0);
   const { showToast } = useToast();
 
+  // Update complaints when preloaded data changes
   useEffect(() => {
-    loadComplaints();
+    if (preloadedComplaints && preloadedComplaints.length > 0) {
+      setComplaints(preloadedComplaints);
+      setLoading(false);
+    }
+  }, [preloadedComplaints]);
+
+  // Only load if no preloaded data
+  useEffect(() => {
+    if (!preloadedComplaints || preloadedComplaints.length === 0) {
+      loadComplaints();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadComplaints = async () => {
@@ -59,7 +76,8 @@ export const ComplaintManagement: React.FC<ComplaintManagementProps> = ({ onComp
     });
   }, [complaints, searchTerm]);
 
-  const columns = [
+  // Memoize columns to prevent recreation on every render
+  const columns = useMemo(() => [
     {
       id: 'CmpNo',
       header: 'Complaint#',
@@ -139,7 +157,7 @@ export const ComplaintManagement: React.FC<ComplaintManagementProps> = ({ onComp
       enableColumnFilter: true,
       width: '200px',
     },
-  ];
+  ], []);
 
   const expandableRow = (complaint: Complaint) => (
     <DispositionForm complaint={complaint} onSuccess={loadComplaints} />

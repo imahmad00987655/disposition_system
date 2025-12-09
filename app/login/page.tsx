@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Phone, LogIn, User, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -11,10 +11,22 @@ import { API_BASE_URL } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Clear sessionStorage when user comes to login page (via back button or direct access)
+  // This ensures user must login again even if they have URL with user_no
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Clear session storage to force re-authentication
+      sessionStorage.removeItem('ccms_agentName');
+      sessionStorage.removeItem('ccms_agentCode');
+      sessionStorage.removeItem('ccms_department');
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,8 +86,13 @@ export default function LoginPage() {
           sessionStorage.removeItem('ccms_department');
         }
 
-        // Redirect with the agent code from database - regular users get all tabs
-        router.push(`/?user_no=${data.code}`);
+        // Preserve user_no from URL if it exists, otherwise use code from login
+        // This ensures URL user_no persists even after back button navigation
+        const urlUserNo = searchParams.get('user_no');
+        const finalUserNo = urlUserNo || data.code.toString();
+        
+        // Redirect with preserved user_no from URL, or new code if no URL user_no
+        router.push(`/?user_no=${finalUserNo}`);
       } else {
         setError(data.error || 'Invalid username or password');
         setLoading(false);

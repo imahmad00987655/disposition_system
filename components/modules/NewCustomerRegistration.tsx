@@ -37,7 +37,7 @@ const brandTypes: BrandType[] = [
 ];
 
 const reasonsOfCall: ReasonOfCall[] = [
-  "New Complaint", "Order Follow-up", "Dealer Location", "Product Info", "New DDS Appointment"
+  "New Complaint", "Order Follow-up", "Dealer Location", "Product Info", "New DDS Appointment", "Silent Call",
 ];
 
 const ddsCities: City[] = ["Lahore", "Karachi", "Hyderabad", "Rawalpindi/Islamabad"];

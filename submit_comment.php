@@ -101,8 +101,53 @@ if ($commentType === 'done') {
     $timelineTime = null;
 }
 
-$sql = "INSERT INTO comments (complaint_id, comment, comment_type, comment_date, comment_time, agent_name, tagged_to, timeline_date, timeline_time) 
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+// Calculate countdown_seconds based on timeline_date and timeline_time
+$countdownSeconds = null;
+if ($timelineDate && $timelineTime && $timelineDate !== '0.0.0' && $timelineTime !== '0.0.0') {
+    try {
+        // Normalize timeline time to 24-hour format if needed
+        $timelineTimeNormalized = $timelineTime;
+        
+        // Convert 12-hour format to 24-hour format if needed
+        if (preg_match('/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)/i', $timelineTime, $matches)) {
+            $hours = (int)$matches[1];
+            $minutes = $matches[2];
+            $seconds = isset($matches[3]) ? $matches[3] : '00';
+            $period = strtoupper($matches[4]);
+            
+            if ($period === 'PM' && $hours != 12) {
+                $hours += 12;
+            } elseif ($period === 'AM' && $hours == 12) {
+                $hours = 0;
+            }
+            $timelineTimeNormalized = sprintf('%02d:%s:%s', $hours, $minutes, $seconds);
+        } elseif (preg_match('/^(\d{1,2}):(\d{2})$/', $timelineTime)) {
+            $timelineTimeNormalized = $timelineTime . ':00';
+        }
+        
+        // Create DateTime objects for timeline and current time
+        $timelineDateTime = new DateTime($timelineDate . ' ' . $timelineTimeNormalized, new DateTimeZone('Asia/Karachi'));
+        $currentDateTime = new DateTime('now', new DateTimeZone('Asia/Karachi'));
+        
+        // Calculate difference in seconds
+        $diffSeconds = $timelineDateTime->getTimestamp() - $currentDateTime->getTimestamp();
+        
+        // Only set countdown_seconds if the timeline is in the future
+        if ($diffSeconds > 0) {
+            $countdownSeconds = $diffSeconds;
+        } else {
+            // Timeline has passed, set to 0 or NULL
+            $countdownSeconds = 0;
+        }
+    } catch (Exception $e) {
+        // If there's an error parsing the date/time, set to NULL
+        $countdownSeconds = null;
+        error_log("Error calculating countdown_seconds: " . $e->getMessage());
+    }
+}
+
+$sql = "INSERT INTO comments (complaint_id, comment, comment_type, comment_date, comment_time, agent_name, tagged_to, timeline_date, timeline_time, countdown_seconds) 
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 $stmt = $conn->prepare($sql);
 
@@ -111,7 +156,7 @@ if (!$stmt) {
     exit();
 }
 
-$stmt->bind_param("sssssssss", $complaintId, $comment, $commentType, $currentDate, $currentTime, $agentName, $taggedTo, $timelineDate, $timelineTime);
+$stmt->bind_param("sssssssssi", $complaintId, $comment, $commentType, $currentDate, $currentTime, $agentName, $taggedTo, $timelineDate, $timelineTime, $countdownSeconds);
 
 if ($stmt->execute()) {
     echo json_encode(['status' => 'success', 'message' => 'Comment added successfully']);

@@ -625,6 +625,7 @@ export const DDSDetailPanel: React.FC<DDSDetailPanelProps> = ({ appointment, onR
                           ) : (
                             <Timer
                               endTime={calculateEndTime(item.timeline_date, item.timeline_time)}
+                              countdownSeconds={item.countdown_seconds}
                               commentType={item.comment}
                               complaintId={appointment.id!.toString()}
                               isLatest={isLatestActive}

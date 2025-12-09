@@ -71,6 +71,19 @@ export const CallPopup: React.FC<CallPopupProps> = ({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [callReceivedTime, setCallReceivedTime] = useState<string>('');
+
+  // Set call received time for display (data is already saved in handleCallEvent)
+  useEffect(() => {
+    const currentTime = new Date();
+    const formattedTime = currentTime.toLocaleTimeString('en-US', { 
+      hour12: true, 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    });
+    setCallReceivedTime(formattedTime);
+  }, []);
 
   const toggleComplaint = (complaintId: string) => {
     setExpandedComplaints(prev => {
@@ -212,7 +225,7 @@ export const CallPopup: React.FC<CallPopupProps> = ({
                     </div>
                     <div>
                       <span className="font-medium text-gray-600">Time:</span>
-                      <p className="text-gray-800">{new Date().toLocaleTimeString()}</p>
+                      <p className="text-gray-800">{callReceivedTime || new Date().toLocaleTimeString()}</p>
                     </div>
                   </div>
                 </div>
@@ -342,7 +355,7 @@ export const CallPopup: React.FC<CallPopupProps> = ({
         {/* Footer */}
         <div className="no-drag bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center">
           <div className="text-sm text-gray-500">
-            Call received at {new Date().toLocaleTimeString()}
+            Call received at {callReceivedTime || new Date().toLocaleTimeString()}
           </div>
           <div className="flex gap-3">
             <button

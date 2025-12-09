@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
-import { customerAPI } from '@/lib/api';
+import { customerAPI, complaintAPI } from '@/lib/api';
 import { phoneValidation } from '@/lib/utils';
 import type { InteractionChannel, City } from '@/lib/types';
 
@@ -36,7 +36,7 @@ const cities = [
 ];
 
 const brandTypes = ["Molty", "Celeste", "Dura", "Superstar", "CHF", "Chemical", "Offisys"];
-const reasonsOfCall = ["New Complaint", "Order Follow-up", "Dealer Location", "Product Info", "New DDS Appointment"];
+const reasonsOfCall = ["New Complaint", "Order Follow-up", "Dealer Location", "Product Info", "New DDS Appointment", "Silent Call"];
 const ddsCities: City[] = ["Lahore", "Karachi", "Hyderabad", "Rawalpindi/Islamabad"];
 const interactionChannels: InteractionChannel[] = ['Call', 'WhatsApp', 'Facebook', 'Instagram'];
 
@@ -65,7 +65,50 @@ export const NewCustomerPopup: React.FC<NewCustomerPopupProps> = ({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [callReceivedTime, setCallReceivedTime] = useState<string>('');
+  const [callSaved, setCallSaved] = useState<boolean>(false);
   const { showToast } = useToast();
+
+  // Save call received time to database when popup opens
+  useEffect(() => {
+    if (!callSaved) {
+      const saveCallTime = async () => {
+        const currentTime = new Date();
+        const formattedTime = currentTime.toLocaleTimeString('en-US', { 
+          hour12: true, 
+          hour: 'numeric', 
+          minute: '2-digit', 
+          second: '2-digit' 
+        });
+        setCallReceivedTime(formattedTime);
+
+        // Get agent name from sessionStorage or use prop
+        const agentNameValue = typeof window !== 'undefined' 
+          ? sessionStorage.getItem('ccms_agentName') || agentName
+          : agentName;
+
+        // Save call received time for new customer popup with contact number
+        // Get contact number from popup (jo popup mein show ho raha hai)
+        const cleanedContact = phoneNumber.replace(/\D/g, ''); // Remove dashes, spaces
+        
+        try {
+          await complaintAPI.saveCallReceived({
+            complaint_id: cleanedContact, // Contact number from popup
+            phone_number: phoneNumber,
+            event_type: 'new_customer',
+            agent_name: agentNameValue,
+            popup_type: 'new_customer',
+          });
+          setCallSaved(true);
+          console.log('✅ Call received time saved to database for New Customer popup with contact:', cleanedContact);
+        } catch (error) {
+          console.error('❌ Failed to save call received time:', error);
+        }
+      };
+
+      saveCallTime();
+    }
+  }, [phoneNumber, agentName, callSaved]);
 
   useEffect(() => {
     setShowDDSFields(formData.reason_of_call === 'New DDS Appointment');
@@ -201,6 +244,9 @@ export const NewCustomerPopup: React.FC<NewCustomerPopupProps> = ({
       console.log('API Response:', response);
 
       if (response.success) {
+        // Note: Call received time is already saved when call event was received
+        // No need to save again here
+        
         showToast('success', 'Customer registered successfully!');
         onClose();
         

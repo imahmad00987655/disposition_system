@@ -67,16 +67,25 @@ export const complaintAPI = {
       }
       const data = await response.json();
       
-      // Sort by date (newest first)
-      data.sort((a: any, b: any) => {
-        const dateA = new Date(a.CmpDate.split("-").reverse().join("-"));
-        const dateB = new Date(b.CmpDate.split("-").reverse().join("-"));
-        return dateB.getTime() - dateA.getTime();
+      // Optimized sorting: Pre-parse dates and cache for faster comparison
+      // This is much faster than parsing dates in every comparison
+      const dataWithParsedDates = data.map((item: any) => {
+        const dateParts = item.CmpDate?.split("-") || [];
+        const parsedDate = dateParts.length === 3 
+          ? new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`).getTime()
+          : 0;
+        return { ...item, _sortDate: parsedDate };
       });
+      
+      // Sort using pre-parsed dates (much faster)
+      dataWithParsedDates.sort((a: any, b: any) => b._sortDate - a._sortDate);
+      
+      // Remove temporary sort property
+      const sortedData = dataWithParsedDates.map(({ _sortDate, ...item }: any) => item);
       
       return {
         success: true,
-        data,
+        data: sortedData,
       };
     } catch (error) {
       console.error('API Error:', error);
@@ -90,6 +99,50 @@ export const complaintAPI = {
   // Load complaint history
   loadHistory: async (complaintId: string): Promise<ApiResponse<ComplaintHistory[]>> => {
     return fetchAPI<ComplaintHistory[]>(`load_history.php?complaint_id=${complaintId}`);
+  },
+
+  // Save call received time to database
+  saveCallReceived: async (data: {
+    complaint_id?: string | null;
+    phone_number: string;
+    event_type?: string;
+    agent_name?: string;
+    popup_type?: string;
+  }): Promise<ApiResponse<{ id: number; complaint_id: string | null; phone_number: string; call_received_time: string }>> => {
+    try {
+      const formData = new URLSearchParams({
+        complaint_id: data.complaint_id || '',
+        phone_number: data.phone_number,
+        event_type: data.event_type || 'ring',
+        agent_name: data.agent_name || '',
+        popup_type: data.popup_type || 'call',
+      });
+
+      const response = await fetch(`${API_BASE_URL}save_call_received.php`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return {
+        success: result.status === 'success',
+        data: result.data,
+        error: result.status === 'error' ? result.message : undefined,
+      };
+    } catch (error) {
+      console.error('API Error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
   },
 
   // Submit new comment/disposition

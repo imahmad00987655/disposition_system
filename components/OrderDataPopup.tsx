@@ -67,6 +67,7 @@ export const OrderDataPopup: React.FC<OrderDataPopupProps> = ({
   const [additionalOptions, setAdditionalOptions] = useState<AdditionalOption[]>([]);
   const [commentTypes, setCommentTypes] = useState<CommentTypeDB[]>([]);
   const [selectedCommentTypeData, setSelectedCommentTypeData] = useState<CommentTypeDB | null>(null);
+  const [callReceivedTime, setCallReceivedTime] = useState<string>('');
   const { showToast } = useToast();
 
   // Get comment types that clear timeline (from database)
@@ -229,6 +230,18 @@ export const OrderDataPopup: React.FC<OrderDataPopupProps> = ({
     loadHistory();
     loadAgentName();
   }, [activeOrder?.id]);
+
+  // Set call received time for display (data is already saved in handleCallEvent)
+  useEffect(() => {
+    const currentTime = new Date();
+    const formattedTime = currentTime.toLocaleTimeString('en-US', { 
+      hour12: true, 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    });
+    setCallReceivedTime(formattedTime);
+  }, []);
 
   useEffect(() => {
     // Load tagged users after agentName is loaded
@@ -846,7 +859,7 @@ export const OrderDataPopup: React.FC<OrderDataPopupProps> = ({
 
       <div className="no-drag bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center">
         <div className="text-sm text-gray-500">
-          Brand: <span className="font-semibold text-gray-700">{activeOrder.brand_name}</span>
+          Call received at {callReceivedTime || new Date().toLocaleTimeString()} | Brand: <span className="font-semibold text-gray-700">{activeOrder.brand_name}</span>
         </div>
         <button
           onClick={onClose}

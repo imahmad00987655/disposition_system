@@ -114,12 +114,25 @@ export default function Home() {
     const storedAgentCode = sessionStorage.getItem('ccms_agentCode');
     const effectiveDepartment = storedDepartment || urlDepartment || null;
 
-    // Check if user is authenticated (has user_no in URL, department in URL/session, or stored agent info)
-    const hasAuth = userNo || effectiveDepartment || storedAgentName || storedAgentCode;
-
-    if (!hasAuth) {
-      // No authentication found, redirect to login
+    // Check if user is authenticated
+    // Must have BOTH URL user_no AND sessionStorage data (user must have logged in)
+    // If URL has user_no but no sessionStorage, redirect to login (preserving URL)
+    const hasUrlAuth = userNo || effectiveDepartment;
+    const hasSessionAuth = storedAgentName || storedAgentCode || effectiveDepartment;
+    
+    // User must have both URL parameter AND session storage (meaning they logged in)
+    // If only URL exists but no session, they need to login again
+    if (!hasUrlAuth && !hasSessionAuth) {
+      // No authentication found at all, redirect to login
       router.push('/login');
+      return;
+    }
+    
+    // If URL has user_no but no session storage, user needs to login again
+    // Preserve the user_no in URL when redirecting
+    if (hasUrlAuth && !hasSessionAuth) {
+      // Preserve user_no in URL when redirecting to login
+      router.push(`/login?user_no=${userNo || ''}`);
       return;
     }
 
@@ -309,7 +322,7 @@ export default function Home() {
     }
   };
 
-  const handleCallEvent = (phoneNumber: string, eventType: string, _: any[]) => {
+  const handleCallEvent = async (phoneNumber: string, eventType: string, _: any[]) => {
     console.log('=================== Call Event Received ===================');
     console.log('📞 Phone Number:', phoneNumber);
     console.log('📋 Event Type:', eventType);
@@ -350,6 +363,75 @@ export default function Home() {
     console.log('✅ Found matches - Complaints:', matchingComplaints.length, 
                 '| Customers:', matchingCustomers.length, '| DDS:', matchingDDS.length,
                 '| Orders:', matchingOrders.length);
+    
+    // Save call received time to database IMMEDIATELY when call arrives
+    // Collect all IDs to merge
+    const allIds: string[] = [];
+    const popupTypes: string[] = [];
+    
+    // Collect complaint IDs
+    if (matchingComplaints.length > 0) {
+      matchingComplaints.forEach(complaint => {
+        if (complaint.CmpNo) allIds.push(complaint.CmpNo);
+      });
+      popupTypes.push('call');
+    }
+    
+    // Collect customer contact numbers (use contact number, not customer ID)
+    if (matchingCustomers.length > 0) {
+      matchingCustomers.forEach(customer => {
+        if (customer.contact) {
+          // Use contact number, not customer ID
+          const contactCleaned = customer.contact.replace(/\D/g, '');
+          if (contactCleaned) allIds.push(contactCleaned);
+        }
+      });
+      popupTypes.push('customer');
+    }
+    
+    // Collect DDS IDs
+    if (matchingDDS.length > 0) {
+      matchingDDS.forEach(dds => {
+        if (dds.id) allIds.push(String(dds.id));
+      });
+      popupTypes.push('dds');
+    }
+    
+    // Collect order IDs
+    if (matchingOrders.length > 0) {
+      matchingOrders.forEach(order => {
+        if (order.order_name) allIds.push(order.order_name);
+      });
+      popupTypes.push('order');
+    }
+    
+    // If no matches found, still save for new customer popup with contact number
+    if (matchingComplaints.length === 0 && matchingCustomers.length === 0 && 
+        matchingDDS.length === 0 && matchingOrders.length === 0) {
+      // Use cleaned phone number as contact ID for new customer
+      const cleanedPhone = phoneNumber.replace(/\D/g, '');
+      if (cleanedPhone) allIds.push(cleanedPhone);
+      popupTypes.push('new_customer');
+    }
+    
+    // Get agent name
+    const agentName = typeof window !== 'undefined' 
+      ? sessionStorage.getItem('ccms_agentName') || ''
+      : '';
+    
+    // Save to database with merged IDs and popup types
+    try {
+      await complaintAPI.saveCallReceived({
+        complaint_id: allIds.length > 0 ? allIds.join(',') : null,
+        phone_number: phoneNumber,
+        event_type: eventType,
+        agent_name: agentName,
+        popup_type: popupTypes.join(','), // Comma-separated popup types
+      });
+      console.log('✅ Call received time saved to database immediately');
+    } catch (error) {
+      console.error('❌ Failed to save call received time:', error);
+    }
     
     // Generate unique ID for popups
     const popupId = `${phoneNumber}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -640,7 +722,11 @@ export default function Home() {
       id: 'complaints',
       label: 'Complaints',
       icon: <Phone className="w-5 h-5" />,
-      component: <ComplaintManagement onComplaintsLoaded={setAllComplaints} searchTerm={globalSearchTerm} />,
+      component: <ComplaintManagement 
+        onComplaintsLoaded={setAllComplaints} 
+        searchTerm={globalSearchTerm}
+        preloadedComplaints={allComplaints}
+      />,
     },
     {
       id: 'customers',
@@ -701,25 +787,25 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white shadow-md border-b border-gray-100 sticky top-0 z-50 backdrop-blur-sm bg-white/95">
         <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-3 lg:py-4">
+          <div className="flex justify-between items-center py-3 lg:py-4 gap-2 lg:gap-4">
             {/* Logo & Branding */}
-            <div className="flex items-center space-x-3 lg:space-x-4 flex-shrink-0">
-              <div className="bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 p-2.5 lg:p-3 rounded-xl shadow-lg transform hover:scale-105 transition-transform duration-200">
-                <Phone className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
+            <div className="flex items-center gap-2 lg:gap-3 xl:gap-4 flex-shrink-0 min-w-0">
+              <div className="bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 p-2 lg:p-2.5 xl:p-3 rounded-xl shadow-lg transform hover:scale-105 transition-transform duration-200 flex-shrink-0">
+                <Phone className="w-4 h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 text-white" />
               </div>
-              <div className="hidden sm:block">
-                <h1 className="text-base lg:text-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
+              <div className="hidden md:block min-w-0">
+                <h1 className="text-sm lg:text-base xl:text-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent truncate">
                   Customer Relationship Management
                 </h1>
-                <p className="text-xs text-gray-500 mt-0.5">Customer Journey Tracking System</p>
+                <p className="text-xs text-gray-500 mt-0.5 truncate">Customer Journey Tracking System</p>
               </div>
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden lg:flex items-center space-x-4 flex-1 max-w-4xl mx-6">
-              {/* Search Bar */}
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="hidden lg:flex items-center gap-3 flex-1 min-w-0 mx-4">
+              {/* Search Bar - Better responsive sizing */}
+              <div className="relative flex-shrink-0 min-w-[200px] max-w-[350px] w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 <input
                   type="text"
                   value={globalSearchTerm}
@@ -729,8 +815,8 @@ export default function Home() {
                 />
               </div>
               
-              {/* Navigation Tabs */}
-              <nav className="flex items-center space-x-2">
+              {/* Navigation Tabs - Better wrapping and spacing */}
+              <nav className="flex items-center gap-2 flex-wrap min-w-0">
                 {visibleTabs.map((tab) => {
                   const badgeCount = globalSearchTerm
                     ? tab.id === 'complaints' ? searchResultBadges.complaints :
@@ -748,23 +834,26 @@ export default function Home() {
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`
-                      flex items-center space-x-2 px-4 py-2.5 rounded-xl font-semibold text-sm
-                      transition-all duration-300 outline-none relative group
+                      flex items-center gap-2 px-3 xl:px-4 py-2.5 rounded-xl font-semibold text-xs xl:text-sm
+                      transition-all duration-300 outline-none relative group flex-shrink-0
                       ${activeTab === tab.id
                         ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/30 scale-105'
                         : 'text-gray-600 hover:bg-gradient-to-r hover:from-purple-50 hover:to-indigo-50 hover:text-purple-600'
                       }
                     `}
                   >
-                    <span className={activeTab === tab.id ? 'text-white' : 'text-gray-500 group-hover:text-purple-600'}>
+                    <span className={`flex-shrink-0 ${activeTab === tab.id ? 'text-white' : 'text-gray-500 group-hover:text-purple-600'}`}>
                       {tab.icon}
                     </span>
-                    <span className="whitespace-nowrap">{tab.label}</span>
+                    <span className="whitespace-nowrap hidden xl:inline">{tab.label}</span>
+                    <span className="whitespace-nowrap xl:hidden">{tab.label.split(' ')[0]}</span>
                     
                     {/* Notification Badge */}
                     {badgeCount > 0 && (
-                      <span className={`absolute -top-1 -right-1 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 ${
-                        activeTab === tab.id ? 'bg-white text-purple-600' : 'bg-red-500 animate-pulse'
+                      <span className={`absolute -top-1 -right-1 text-xs font-bold rounded-full min-w-[18px] h-4 xl:h-5 flex items-center justify-center px-1 xl:px-1.5 shadow-lg ${
+                        activeTab === tab.id 
+                          ? 'bg-yellow-400 text-purple-900 border-2 border-purple-700' 
+                          : 'bg-red-500 text-white animate-pulse'
                       }`}>
                         {badgeCount > 99 ? '99+' : badgeCount}
                       </span>
@@ -782,11 +871,12 @@ export default function Home() {
                     router.push('/login');
                   }
                 }}
-                className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl transition-all duration-200 font-medium text-sm shadow-md hover:shadow-lg transform hover:scale-105"
+                className="flex items-center gap-2 px-3 xl:px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl transition-all duration-200 font-medium text-xs xl:text-sm shadow-md hover:shadow-lg transform hover:scale-105 flex-shrink-0"
                 title="Logout"
               >
-                <LogOut className="w-4 h-4" />
-                <span className="whitespace-nowrap">Logout</span>
+                <LogOut className="w-4 h-4 flex-shrink-0" />
+                <span className="whitespace-nowrap hidden xl:inline">Logout</span>
+                <span className="whitespace-nowrap xl:hidden">Out</span>
               </button>
             </div>
 
@@ -864,8 +954,10 @@ export default function Home() {
                         
                         {/* Notification Badge */}
                         {badgeCount > 0 && (
-                          <span className={`text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 ${
-                            activeTab === tab.id ? 'bg-white text-purple-600' : 'bg-red-500 text-white animate-pulse'
+                          <span className={`text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 shadow-lg ${
+                            activeTab === tab.id 
+                              ? 'bg-yellow-400 text-purple-900 border-2 border-purple-700' 
+                              : 'bg-red-500 text-white animate-pulse'
                           }`}>
                             {badgeCount > 99 ? '99+' : badgeCount}
                           </span>

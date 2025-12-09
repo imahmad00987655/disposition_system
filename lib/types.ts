@@ -32,6 +32,7 @@ export interface ComplaintHistory {
   tagged_to?: string;
   timeline_date?: string;
   timeline_time?: string;
+  countdown_seconds?: number | null;
 }
 
 export type InteractionChannel =
@@ -176,7 +177,8 @@ export type ReasonOfCall =
   | "Order Follow-up"
   | "Dealer Location"
   | "Product Info"
-  | "New DDS Appointment";
+  | "New DDS Appointment"
+  | "Silent Call";
 
 export type DDSStatus =
   | "Pending"
@@ -311,6 +313,7 @@ export interface RecentActivity {
   activity_type: 'complaint' | 'customer' | 'dds' | 'order';
   comment: string;
   agent_name: string;
+  tagged_to?: string | null;
   timestamp: string;
   comment_type: string;
 }
@@ -329,6 +332,7 @@ export interface TeamDashboardData {
     total_comments: number;
     total_customers: number;
     total_dds_updates: number;
+    multiple_tagged_count?: number;
     date_range: {
       start: string;
       end: string;
@@ -338,5 +342,6 @@ export interface TeamDashboardData {
   agent_stats: AgentStats[];
   recent_activities: RecentActivity[];
   daily_stats: DailyStats[];
+  tagged_users_stats?: Record<string, number>;
 }
 

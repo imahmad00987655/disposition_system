@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -47,6 +47,13 @@ export const DispositionForm: React.FC<DispositionFormProps> = ({ complaint, onS
   const [commentTypes, setCommentTypes] = useState<CommentTypeDB[]>([]);
   const [selectedCommentTypeData, setSelectedCommentTypeData] = useState<CommentTypeDB | null>(null);
   const { showToast } = useToast();
+
+  // Get comment types that clear timeline (from database)
+  const clearTimelineComments = useMemo(() => {
+    return commentTypes
+      .filter(ct => ct.clear_timeline)
+      .map(ct => ct.comment_text);
+  }, [commentTypes]);
 
   const { register, handleSubmit, formState: { errors }, watch, setValue, reset, setError, clearErrors } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -503,18 +510,19 @@ export const DispositionForm: React.FC<DispositionFormProps> = ({ complaint, onS
             <p className="text-gray-500 text-center py-8">No previous interactions</p>
           ) : (
             (() => {
-              // EXACT logic from script - find latest active timer
-              const specialComment = "Customer is guided to wait as per already added timelines";
+              // Find latest active timer using database clear_timeline flag
               let latestActiveIndex = -1;
               let latestTimestamp: Date | null = null;
               
-              // Find the most recent entry with a timeline (excluding special comments and "Done")
+              // Find the most recent entry with a timeline (excluding clear_timeline comments)
               history.forEach((entry, idx) => {
-                const isSpecialComment = entry.comment === specialComment;
-                const isDone = entry.comment?.toLowerCase().includes('done');
+                // Check if comment matches any database comment type with clear_timeline = 1
+                const isSpecial = clearTimelineComments.some(ct => 
+                  entry.comment === ct || entry.comment.startsWith(ct + ' (')
+                );
                 const entryTimestamp = new Date(entry.timestamp);
                 
-                if (!isSpecialComment && !isDone && entry.timeline_date && entry.timeline_time) {
+                if (!isSpecial && entry.timeline_date && entry.timeline_time) {
                   if (!latestTimestamp || entryTimestamp > latestTimestamp) {
                     latestTimestamp = entryTimestamp;
                     latestActiveIndex = idx;
@@ -523,8 +531,10 @@ export const DispositionForm: React.FC<DispositionFormProps> = ({ complaint, onS
               });
               
               return history.map((item, index) => {
-                const isSpecialComment = item.comment === specialComment;
-                const isDone = item.comment?.toLowerCase().includes('done');
+                // Check if comment matches any database comment type with clear_timeline = 1
+                const isSpecial = clearTimelineComments.some(ct => 
+                  item.comment === ct || item.comment.startsWith(ct + ' (')
+                );
                 const isLatestActive = index === latestActiveIndex;
                 
                 return (
@@ -573,13 +583,14 @@ export const DispositionForm: React.FC<DispositionFormProps> = ({ complaint, onS
                       <div className="flex justify-between items-center">
                         <span className="text-gray-500 font-semibold text-xs">Timer Countdown:</span>
                         <span className="ml-1">
-                          {(isSpecialComment || isDone || !item.timeline_date || !item.timeline_time) ? (
-                            // Special comment or Done: Show 0:0:0 in green
+                          {(isSpecial || !item.timeline_date || !item.timeline_time) ? (
+                            // Clear timeline comment or no timeline: Show 0:0:0 in green
                             <span className="text-green-600">0:0:0</span>
                           ) : (
                             // Regular comment with timer
                             <Timer
                               endTime={calculateEndTime(item.timeline_date, item.timeline_time)}
+                              countdownSeconds={item.countdown_seconds}
                               commentType={item.comment}
                               complaintId={complaint.CmpNo}
                               isLatest={isLatestActive}

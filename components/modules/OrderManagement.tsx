@@ -680,6 +680,7 @@ const OrderDetailPanel: React.FC<OrderDetailPanelProps> = ({ order }) => {
                           ) : (
                             <Timer
                               endTime={calculateEndTime(item.timeline_date, item.timeline_time)}
+                              countdownSeconds={item.countdown_seconds}
                               commentType={item.comment}
                               complaintId={order.id.toString()}
                               isLatest={isLatestActive}

@@ -33,10 +33,10 @@ if (!$complaintId) {
 }
 
 // Get comment_date and comment_time separately and format properly
-$sql = "SELECT comment, 
+$sql = "SELECT id, comment, 
         comment_date, 
         comment_time,
-        agent_name, tagged_to, timeline_date, timeline_time 
+        agent_name, tagged_to, timeline_date, timeline_time, countdown_seconds 
         FROM comments WHERE complaint_id = ? ORDER BY id DESC";
 
 $stmt = $conn->prepare($sql);
@@ -111,6 +111,30 @@ while ($row = $result->fetch_assoc()) {
 
             $row['timeline_date'] = $timelineDateTime->format('Y-m-d');
             $row['timeline_time'] = $timelineDateTime->format('H:i:s');
+            
+            // Recalculate countdown_seconds based on current time and update in database
+            $currentDateTime = new DateTime('now', new DateTimeZone('Asia/Karachi'));
+            $diffSeconds = $timelineDateTime->getTimestamp() - $currentDateTime->getTimestamp();
+            
+            if ($diffSeconds > 0) {
+                $newCountdownSeconds = $diffSeconds;
+            } else {
+                $newCountdownSeconds = 0;
+            }
+            
+            // Update countdown_seconds in database
+            if (isset($row['id'])) {
+                $updateSql = "UPDATE comments SET countdown_seconds = ? WHERE id = ?";
+                $updateStmt = $conn->prepare($updateSql);
+                if ($updateStmt) {
+                    $updateStmt->bind_param("ii", $newCountdownSeconds, $row['id']);
+                    $updateStmt->execute();
+                    $updateStmt->close();
+                }
+            }
+            
+            // Return updated value in response
+            $row['countdown_seconds'] = $newCountdownSeconds;
         } catch (Exception $e) {
             error_log(
                 "Failed to normalize timeline date/time: " . $e->getMessage() .
@@ -118,6 +142,18 @@ while ($row = $result->fetch_assoc()) {
                 " | Time: " . ($row['timeline_time'] ?? '')
             );
         }
+    } else {
+        // No timeline, set countdown_seconds to NULL and update in database
+        if (isset($row['id'])) {
+            $updateSql = "UPDATE comments SET countdown_seconds = NULL WHERE id = ?";
+            $updateStmt = $conn->prepare($updateSql);
+            if ($updateStmt) {
+                $updateStmt->bind_param("i", $row['id']);
+                $updateStmt->execute();
+                $updateStmt->close();
+            }
+        }
+        $row['countdown_seconds'] = null;
     }
     
     // Remove the separate date/time fields
