@@ -144,6 +144,47 @@ try {
     $callbackreminderConn = new PDO("mysql:host=$mysqlHost;dbname=callbackreminder;charset=utf8mb4", $mysqlUser, $mysqlPass);
     $callbackreminderConn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
+    // Get tagged users statistics
+    $taggedUsersSql = "SELECT tagged_to, COUNT(*) as count
+                       FROM comments
+                       WHERE comment_date BETWEEN :start_date AND :end_date
+                       AND tagged_to IS NOT NULL AND tagged_to != ''
+                       AND comment_type != 'Auto'
+                       GROUP BY tagged_to
+                       ORDER BY count DESC";
+    
+    $taggedStmt = $mysqlConn->prepare($taggedUsersSql);
+    $taggedStmt->bindParam(':start_date', $startDate);
+    $taggedStmt->bindParam(':end_date', $endDate);
+    $taggedStmt->execute();
+    
+    $taggedUsersStats = [];
+    $multipleTaggedCount = 0;
+    while ($row = $taggedStmt->fetch(PDO::FETCH_OBJ)) {
+        $taggedTo = $row->tagged_to;
+        $count = (int)$row->count;
+        
+        // Check if multiple users are tagged (comma-separated)
+        if (strpos($taggedTo, ',') !== false) {
+            $multipleTaggedCount += $count;
+            // Split and count individual users
+            $users = array_map('trim', explode(',', $taggedTo));
+            foreach ($users as $user) {
+                if (!empty($user)) {
+                    if (!isset($taggedUsersStats[$user])) {
+                        $taggedUsersStats[$user] = 0;
+                    }
+                    $taggedUsersStats[$user] += $count;
+                }
+            }
+        } else {
+            if (!isset($taggedUsersStats[$taggedTo])) {
+                $taggedUsersStats[$taggedTo] = 0;
+            }
+            $taggedUsersStats[$taggedTo] += $count;
+        }
+    }
+    
     // Get statistics for each agent
     $agentStats = [];
     $totalComplaints = 0;
@@ -233,10 +274,10 @@ try {
     // We need to query from multiple databases, so we'll do separate queries and combine
     $recentActivities = [];
     
-    // Get complaint activities from callback2 database
+    // Get complaint activities from callback2 database (including tagged_to)
     $complaintActivitiesSql = "SELECT c.complaint_id, c.comment, c.agent_name, 
                                    CONCAT(c.comment_date, ' ', c.comment_time) as timestamp, 
-                                   c.comment_type,
+                                   c.comment_type, c.tagged_to,
                                    'complaint' as activity_type
                             FROM callback2.comments c
                             WHERE c.comment_date BETWEEN :start_date AND :end_date
@@ -255,6 +296,7 @@ try {
             'activity_type' => $row->activity_type,
             'comment' => $row->comment,
             'agent_name' => $row->agent_name,
+            'tagged_to' => $row->tagged_to ?? null,
             'timestamp' => $row->timestamp,
             'comment_type' => $row->comment_type
         ];
@@ -360,6 +402,7 @@ try {
                 'total_comments' => $totalComments,
                 'total_customers' => $totalCustomers,
                 'total_dds_updates' => $totalDDS,
+                'multiple_tagged_count' => $multipleTaggedCount,
                 'date_range' => [
                     'start' => $startDate,
                     'end' => $endDate,
@@ -368,7 +411,8 @@ try {
             ],
             'agent_stats' => $agentStats,
             'recent_activities' => $recentActivities,
-            'daily_stats' => $dailyStats
+            'daily_stats' => $dailyStats,
+            'tagged_users_stats' => $taggedUsersStats
         ]
     ]);
     

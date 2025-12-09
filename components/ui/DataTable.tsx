@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronUp, ChevronsUpDown, Copy } from 'lucide-react';
-import { SearchInput } from './SearchInput';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Copy, Search } from 'lucide-react';
 import { Button } from './Button';
 import { ExportMenu } from './ExportMenu';
 import { cn } from '@/lib/utils';
@@ -45,6 +44,7 @@ export function DataTable<T extends Record<string, any>>({
   getRowId = (row) => row.id,
   className,
 }: DataTableProps<T>) {
+  const [searchInput, setSearchInput] = useState('');
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -54,6 +54,17 @@ export function DataTable<T extends Record<string, any>>({
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
     new Set(columns.map(col => col.id))
   );
+
+  const handleSearch = () => {
+    setGlobalFilter(searchInput);
+    setCurrentPage(0); // Reset to first page on search
+  };
+
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
 
   // Filter data
   const filteredData = useMemo(() => {
@@ -166,12 +177,29 @@ export function DataTable<T extends Record<string, any>>({
       {/* Controls */}
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         {searchable && (
-          <SearchInput
-            value={globalFilter}
-            onChange={setGlobalFilter}
-            placeholder={searchPlaceholder}
-            className="w-full sm:w-96"
-          />
+          <div className="flex gap-2 w-full sm:w-96">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 outline-none"
+                placeholder={searchPlaceholder}
+              />
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSearch}
+              className="px-6"
+            >
+              Search
+            </Button>
+          </div>
         )}
 
         <div className="flex gap-2">
